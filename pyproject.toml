@@ -1,0 +1,24 @@
+[project]
+name = "resident-read-review"
+version = "0.1.0"
+description = "GUI Automation tool to collate resident reads from Sectra interface"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "ipykernel>=6.29.5",
+    "opencv-python>=4.10.0.84",
+    "matplotlib>=3.9.2",
+    "winocr>=0.0.14",
+    "mss>=9.0.2",
+    "keyboard>=0.13.5",
+    "mouse>=0.7.1",
+    "pyautogui>=0.9.54",
+    "pyperclip>=1.9.0",
+    "pywin32>=308",
+    "pyqt6>=6.7.1",
+]
+
+[tool.uv]
+dev-dependencies = [
+    "pillow>=11.0.0",
+]
