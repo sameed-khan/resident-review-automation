@@ -7,7 +7,8 @@ import mss.tools
 import numpy as np
 from mss import mss
 
-from screen_parse import generate_table
+from screen_parse import generate_table, is_contained, monitor_normalize
+from PIL import Image
 
 
 class UiState:
@@ -16,15 +17,20 @@ class UiState:
         scroll_bounds: tuple[int, int, int, int],
         header_bounds: tuple[int, int, int, int],
     ):
-        self.scroll_bounds = scroll_bounds
-        self.header_bounds = header_bounds
 
+        # Find current monitor based on which screen contains the scroll bounds
         with mss() as sct:
-            # TODO: need to account for different monitors
-            screenshot = sct.grab(sct.monitors[2])  # grabs monitor 1 by default
+            contains_screenbounds = [is_contained(screen, scroll_bounds) for screen in sct.monitors[1:]]
+            current_monitor = contains_screenbounds.index(True)
+            current_monitor = sct.monitors[1:][current_monitor]
+            self.current_monitor = current_monitor
+            screenshot = sct.grab(current_monitor)  # exclude 0th "monitor" which is the entire screen
             frame = np.array(screenshot)[:, :, :3]  # BGRA -> RGB
 
-        self.table = generate_table(frame, scroll_bounds, header_bounds)
+            self.scroll_bounds = monitor_normalize(current_monitor, scroll_bounds)  # normalize raw coords by dims of the new monitor
+            self.header_bounds = monitor_normalize(current_monitor, header_bounds)
+
+        self.table = generate_table(frame, self.scroll_bounds, self.header_bounds)
         for row in self.table:
             row["state"]["identifier"] = "Accession"
             row["state"]["clicked"] = False
@@ -32,8 +38,7 @@ class UiState:
     def refresh(self):
         """Updates the internal table state based on new elements on screen"""
         with mss() as sct:
-            # TODO: need to account for different monitors
-            screenshot = sct.grab(sct.monitors[2])
+            screenshot = sct.grab(self.current_monitor)  # Invariant: application always stays on the same screen
             frame = np.array(screenshot)[:, :, :3]
 
         new_table = generate_table(frame, self.scroll_bounds, self.header_bounds)

@@ -373,17 +373,17 @@ def signal_handler(signum, frame):
 
 
 def main():
-    signal.signal(signal.SIGINT, signal_handler)
+    # signal.signal(signal.SIGINT, signal_handler)
 
-    app = QApplication(sys.argv)
-    app.setStyle("Fusion")
+    # app = QApplication(sys.argv)
+    # app.setStyle("Fusion")
 
-    app_state = AppState()
-    window = MainWindow(app_state)
-    window.show()
+    # app_state = AppState()
+    # window = MainWindow(app_state)
+    # window.show()
 
-    print("Press Ctrl+C to exit")
-    return app.exec()
+    # print("Press Ctrl+C to exit")
+    # return app.exec()
 
     # Dirty coordinates
     # scroll_bounds = (13, 186, 1872, 843)
@@ -394,6 +394,10 @@ def main():
     # scroll_bounds = (15, 185, 1870, 850)
     # run(scroll_bounds, header_bounds)
 
+    # Prod coordinates
+    scroll_bounds = (5216, 209, 1870, 827)
+    header_bounds = (5215, 188, 1887, 20)
+    run(scroll_bounds, header_bounds)
 
 if __name__ == "__main__":
     sys.exit(main())

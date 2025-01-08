@@ -255,3 +255,32 @@ def generate_table(table_img, scroll_bounds, header_bounds):
         data.append(curr_row)
 
     return data
+
+def is_contained(container, rect):
+    """
+    Check if rect is fully contained within container.
+    
+    Args:
+        container (dict): Dict with keys 'left', 'top', 'width', 'height'
+        rect (tuple): Tuple of (left, top, width, height)
+    
+    Returns:
+        bool: True if rect is contained within container
+    """
+    rect_left, rect_top, rect_width, rect_height = rect
+    return (rect_left >= container['left'] and
+            rect_top >= container['top'] and
+            rect_left + rect_width <= container['left'] + container['width'] and
+            rect_top + rect_height <= container['top'] + container['height'])
+
+def monitor_normalize(container, rect):
+   """
+   Normalize rect coordinates relative to container's top-left position
+   """
+   rect_left, rect_top, rect_width, rect_height = rect
+   return (
+       rect_left - container['left'],
+       rect_top - container['top'], 
+       rect_width,
+       rect_height
+   )
