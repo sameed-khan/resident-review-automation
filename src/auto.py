@@ -12,6 +12,7 @@ import pyperclip
 import win32clipboard as clipboard
 from mss import mss
 
+from screen_types import ScreenPoint
 from state import UiState
 
 
@@ -102,7 +103,7 @@ def save_rtf_to_file(rtf_data, filename):
         file.write(rtf_data)
 
 
-def run(scroll_bounds, header_bounds):
+def run(scroll_bounds: ScreenPoint, header_bounds: ScreenPoint):
     """
     Main function to run the automation tasks.
     """

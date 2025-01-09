@@ -22,3 +22,7 @@ dependencies = [
 dev-dependencies = [
     "pillow>=11.0.0",
 ]
+
+[lint]
+# Dont auto-remove imports from commented-out code
+unfixable = ["F401"]

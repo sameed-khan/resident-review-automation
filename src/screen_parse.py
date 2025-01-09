@@ -10,6 +10,8 @@ import numpy as np
 from PIL import Image
 from winocr import recognize_cv2_sync
 
+from screen_types import ArrayCoord, ArrayPoint
+
 
 def hough_to_cartesian(lines, img_shape, orientation="both", angle_threshold=1):
     """
@@ -140,7 +142,28 @@ def compute_intersections(rows, columns):
     return intersections
 
 
-def generate_table(table_img, scroll_bounds, header_bounds):
+# Table schema:
+# {
+#     "index": 0,
+#     "state": {
+#         "identifier": "Accession",
+#         "clicked": False
+#     },
+#     "column_name": {
+#         "data": "value",
+#         "coordinate": [x, y],
+#         "textstart": [x, y]
+#     }
+#     ...
+#     "Score": { <-- this is the column that contains the button that pulls up the readout
+#         ...
+#     }
+# }
+def generate_table(
+    table_img: np.ndarray,
+    scroll_bounds: tuple[ArrayCoord, ArrayCoord, int, int],
+    header_bounds: tuple[ArrayCoord, ArrayCoord, int, int],
+) -> dict[str, dict[str, str | ArrayPoint | bool]]:
     # Get relevant regions
     scx, scy, sc_height, sc_width = scroll_bounds
     hx, hy, h_width, h_height = header_bounds
@@ -256,31 +279,22 @@ def generate_table(table_img, scroll_bounds, header_bounds):
 
     return data
 
+
 def is_contained(container, rect):
     """
     Check if rect is fully contained within container.
-    
+
     Args:
         container (dict): Dict with keys 'left', 'top', 'width', 'height'
         rect (tuple): Tuple of (left, top, width, height)
-    
+
     Returns:
         bool: True if rect is contained within container
     """
     rect_left, rect_top, rect_width, rect_height = rect
-    return (rect_left >= container['left'] and
-            rect_top >= container['top'] and
-            rect_left + rect_width <= container['left'] + container['width'] and
-            rect_top + rect_height <= container['top'] + container['height'])
-
-def monitor_normalize(container, rect):
-   """
-   Normalize rect coordinates relative to container's top-left position
-   """
-   rect_left, rect_top, rect_width, rect_height = rect
-   return (
-       rect_left - container['left'],
-       rect_top - container['top'], 
-       rect_width,
-       rect_height
-   )
+    return (
+        rect_left >= container["left"]
+        and rect_top >= container["top"]
+        and rect_left + rect_width <= container["left"] + container["width"]
+        and rect_top + rect_height <= container["top"] + container["height"]
+    )
