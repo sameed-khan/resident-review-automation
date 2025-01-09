@@ -8,7 +8,13 @@ import numpy as np
 from mss import mss
 
 from screen_parse import generate_table, is_contained
-from screen_types import ScreenCoord, ScreenPoint, screen_to_array
+from screen_types import (
+    ArrayPoint,
+    ScreenCoord,
+    ScreenPoint,
+    array_to_screen,
+    screen_to_array,
+)
 
 
 class UiState:
@@ -41,6 +47,22 @@ class UiState:
             row["state"]["identifier"] = "Accession"
             row["state"]["clicked"] = False
 
+            for key in row:
+                # Convert array coordinates to monitor coordinates
+                if key not in ["state", "index"]:
+                    old_coord = row[key]["coordinate"]
+                    oldtextstart = row[key]["textstart"]
+                    if old_coord is not None:
+                        new_coord = array_to_screen(
+                            self.current_monitor, ArrayPoint(old_coord)
+                        )
+                        row[key]["coordinate"] = new_coord
+                    if oldtextstart is not None:
+                        new_textstart = array_to_screen(
+                            self.current_monitor, ArrayPoint(oldtextstart)
+                        )
+                        row[key]["textstart"] = new_textstart
+
     def refresh(self):
         """Updates the internal table state based on new elements on screen"""
         with mss() as sct:
@@ -58,6 +80,21 @@ class UiState:
 
         commit_table = []
         for idx, row in enumerate(new_table):
+            for key in row:
+                if key not in ["state", "index"]:
+                    old_coord = row[key]["coordinate"]
+                    oldtextstart = row[key]["textstart"]
+                    if old_coord is not None:
+                        new_coord = array_to_screen(
+                            self.current_monitor, ArrayPoint(old_coord)
+                        )
+                        row[key]["coordinate"] = new_coord
+                    if oldtextstart is not None:
+                        new_textstart = array_to_screen(
+                            self.current_monitor, ArrayPoint(oldtextstart)
+                        )
+                        row[key]["textstart"] = new_textstart
+
             if row[identifier] in old_ids:
                 commit_table.append(self.table[idx])
                 continue

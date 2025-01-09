@@ -1,4 +1,3 @@
-import signal
 import sys
 import time
 import traceback
@@ -373,17 +372,17 @@ def signal_handler(signum, frame):
 
 
 def main():
-    signal.signal(signal.SIGINT, signal_handler)
+    # signal.signal(signal.SIGINT, signal_handler)
 
-    app = QApplication(sys.argv)
-    app.setStyle("Fusion")
+    # app = QApplication(sys.argv)
+    # app.setStyle("Fusion")
 
-    app_state = AppState()
-    window = MainWindow(app_state)
-    window.show()
+    # app_state = AppState()
+    # window = MainWindow(app_state)
+    # window.show()
 
-    print("Press Ctrl+C to exit")
-    return app.exec()
+    # print("Press Ctrl+C to exit")
+    # return app.exec()
 
     # Dirty coordinates
     # scroll_bounds = (13, 186, 1872, 843)
@@ -395,9 +394,9 @@ def main():
     # run(scroll_bounds, header_bounds)
 
     # Dev multiscreen coordinates
-    # scroll_bounds = (-1906, 210, 1890, 819)
-    # header_bounds = (-1906, 189, 1890, 22)
-    # run(scroll_bounds, header_bounds)
+    scroll_bounds = (-1906, 210, 1900, 819)
+    header_bounds = (-1906, 189, 1900, 22)
+    run(scroll_bounds, header_bounds)
 
     # Prod coordinates
     # scroll_bounds = (5216, 209, 1870, 827)

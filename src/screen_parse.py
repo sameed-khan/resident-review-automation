@@ -7,7 +7,6 @@ from math import ceil
 
 import cv2 as cv
 import numpy as np
-from PIL import Image
 from winocr import recognize_cv2_sync
 
 from screen_types import ArrayCoord, ArrayPoint
@@ -69,35 +68,55 @@ def hough_to_cartesian(lines, img_shape, orientation="both", angle_threshold=1):
     return cartesian_lines
 
 
-def find_columns(img, bounds, cell_min_width=50):
-    x, y, width, height = bounds
-    header = img[y : y + height, x : x + width]
-    header_edges = cv.Canny(header, 50, 100)
-    kernel = np.ones((3, 3), np.uint8)
-    header_edges = cv.morphologyEx(header_edges, cv.MORPH_CLOSE, kernel)
-    vpp = np.sum(header_edges, axis=0)
-    thresh = np.percentile(vpp, 99)
-    peaks = np.argwhere(vpp >= thresh).flatten()
+# def find_columns(img, bounds, cell_min_width=50):
+#     x, y, width, height = bounds
+#     header = img[y : y + height, x : x + width]
+#     header_edges = cv.Canny(header, 50, 100)
+#     kernel = np.ones((3, 3), np.uint8)
+#     header_edges = cv.morphologyEx(header_edges, cv.MORPH_CLOSE, kernel)
+#     vpp = np.sum(header_edges, axis=0)
+#     thresh = np.percentile(vpp, 99)
+#     peaks = np.argwhere(vpp >= thresh).flatten()
 
-    # Filter out adjacent columns
-    peaks = peaks[np.where(np.diff(peaks) > cell_min_width)[0] + 1]
+#     # Filter out adjacent columns
+#     peaks = peaks[np.where(np.diff(peaks) > cell_min_width)[0] + 1]
 
-    ff = Image.fromarray(header_edges)
-    ff.save("header.png")
+#     ff = Image.fromarray(header_edges)
+#     ff.save("header.png")
 
-    # Add start and end points if the image did not grab them
-    if peaks[0] > cell_min_width:
-        peaks = np.insert(peaks, 0, 0)
-    if peaks[-1] < width - cell_min_width:
-        peaks = np.append(peaks, width)
+#     # Add start and end points if the image did not grab them
+#     if peaks[0] > cell_min_width:
+#         peaks = np.insert(peaks, 0, 0)
+#     if peaks[-1] < width - cell_min_width:
+#         peaks = np.append(peaks, width)
 
-    columns = np.array(
-        [(int(peak_x + x), y, int(peak_x + x), img.shape[0]) for peak_x in peaks]
-    )
+#     columns = np.array(
+#         [(int(peak_x + x), y, int(peak_x + x), img.shape[0]) for peak_x in peaks]
+#     )
 
-    # ensure sorted from left to right
-    columns = columns[columns[:, 0].argsort()]
-    return columns
+#     # ensure sorted from left to right
+#     columns = columns[columns[:, 0].argsort()]
+#     return columns
+
+
+def find_columns(
+    header_region: np.ndarray,
+) -> tuple[np.ndarray, dict[str, None]]:
+    expanded_header = cv.resize(header_region, (0, 0), fx=2, fy=2)
+    header_text = recognize_cv2_sync(expanded_header)
+    lines = header_text["lines"]
+    columns = []
+    schema = {}
+
+    for line in lines:
+        word = line["words"][0]
+        x1 = word["bounding_rect"]["x"] // 2
+        columns.append(
+            [x1 - 5, 0, x1 - 5, 1080]
+        )  # 1080 is the height of the screen (hardcoded)
+        schema[line["text"]] = {"data": None, "coordinate": None, "textstart": None}
+
+    return np.array(columns), schema
 
 
 def find_rows(img, bounds):
@@ -170,41 +189,41 @@ def generate_table(
     header_area = table_img[hy : hy + h_height, hx : hx + h_width]
 
     # Get columns and rows
-    columns = find_columns(table_img, header_bounds)
+    columns, schema = find_columns(header_area)
     rows = find_rows(table_img, scroll_bounds)
     intersections = compute_intersections(rows, columns)
 
     # Map to text
-    expanded_header = cv.resize(header_area, (0, 0), fx=2, fy=2)
-    header_text = recognize_cv2_sync(expanded_header)
-    lines = header_text["lines"]
-    words = []
-    rects = []
-    for line in lines:
-        for word in line["words"]:
-            words.append(word["text"])
-            rects.append(
-                [
-                    word["bounding_rect"]["x"] // 2,
-                    word["bounding_rect"]["y"] // 2,
-                    word["bounding_rect"]["width"] // 2,
-                    word["bounding_rect"]["height"] // 2,
-                ]
-            )
-    rects = np.array(rects) + np.array(header_bounds)
-    rects = rects[:, :2]
-    t = intersections[None, :, :, :] - rects[:, None, None, :]
-    tl = (t * np.array([-1, -1])[None, None, None, :]).prod(axis=-1)
-    fidx = np.where(tl > 0, tl, np.inf).reshape(len(rects), -1).argmin(axis=1)
-    hcoords = np.array(np.unravel_index(fidx, tl.shape[1:])).T
+    # expanded_header = cv.resize(header_area, (0, 0), fx=2, fy=2)
+    # header_text = recognize_cv2_sync(expanded_header)
+    # lines = header_text["lines"]
+    # words = []
+    # rects = []
+    # for line in lines:
+    #     for word in line["words"]:
+    #         words.append(word["text"])
+    #         rects.append(
+    #             [
+    #                 word["bounding_rect"]["x"] // 2,
+    #                 word["bounding_rect"]["y"] // 2,
+    #                 word["bounding_rect"]["width"] // 2,
+    #                 word["bounding_rect"]["height"] // 2,
+    #             ]
+    #         )
+    # rects = np.array(rects) + np.array(header_bounds)
+    # rects = rects[:, :2]
+    # t = intersections[None, :, :, :] - rects[:, None, None, :]
+    # tl = (t * np.array([-1, -1])[None, None, None, :]).prod(axis=-1)
+    # fidx = np.where(tl > 0, tl, np.inf).reshape(len(rects), -1).argmin(axis=1)
+    # hcoords = np.array(np.unravel_index(fidx, tl.shape[1:])).T
 
-    schema = {"index": None, "state": {}}
-    relcoords = hcoords[:, 1].flatten()
-    for i in range(len(columns) - 1):
-        x = relcoords - i
-        ii = np.where(x == 0)[0]
-        colname = "_".join(np.array(words)[ii])
-        schema[colname] = {"data": None, "coordinate": None, "textstart": None}
+    # schema = {"index": None, "state": {}}
+    # relcoords = hcoords[:, 1].flatten()
+    # for i in range(len(columns)):
+    #     x = relcoords - i
+    #     ii = np.where(x == 0)[0]
+    #     colname = "_".join(np.array(words)[ii])
+    #     schema[colname] = {"data": None, "coordinate": None, "textstart": None}
 
     # Get content
     content_bounds = (
@@ -244,12 +263,11 @@ def generate_table(
     data = []
     for i in range(len(rows) - 1):
         curr_row = deepcopy(schema)
-        curr_row["index"] = i
-        values = [[] for _ in range(1, len(schema.keys()))]
+        values = [[] for _ in range(len(schema.keys()))]
         intersection_point = [
-            None for _ in range(2, len(schema.keys()))
+            None for _ in range(len(schema.keys()))
         ]  # index and state keys
-        textstart_point = [None for _ in range(2, len(schema.keys()))]
+        textstart_point = [None for _ in range(len(schema.keys()))]
         row = np.where(ccoords[:, 0] == i)[0]
         for coord_idx in row:
             values_idx = ccoords[coord_idx, 1]
@@ -270,11 +288,13 @@ def generate_table(
             )
 
         values = [" ".join(v) for v in values]
-        for key in list(schema.keys())[2:]:  # index and state keys
+        for key in list(schema.keys()):  # index and state keys
             curr_row[key]["data"] = values.pop(0)
             curr_row[key]["coordinate"] = intersection_point.pop(0)
             curr_row[key]["textstart"] = textstart_point.pop(0)
 
+        curr_row["index"] = i
+        curr_row["state"] = {"identifier": None, "clicked": False}
         data.append(curr_row)
 
     return data
