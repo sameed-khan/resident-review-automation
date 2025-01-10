@@ -1,4 +1,8 @@
+import os
 import sys
+import pytesseract as pyts
+import logging
+import signal
 import time
 import traceback
 from dataclasses import dataclass
@@ -17,6 +21,7 @@ from PyQt6.QtWidgets import (
     QVBoxLayout,
     QWidget,
 )
+from dotenv import load_dotenv
 
 from auto import run
 
@@ -372,6 +377,8 @@ def signal_handler(signum, frame):
 
 
 def main():
+    load_dotenv()
+    pyts.pytesseract.tesseract_cmd=os.getenv("TESSERACT_LOCATION")
     # signal.signal(signal.SIGINT, signal_handler)
 
     # app = QApplication(sys.argv)
@@ -394,15 +401,23 @@ def main():
     # run(scroll_bounds, header_bounds)
 
     # Dev multiscreen coordinates
-    scroll_bounds = (-1906, 210, 1900, 819)
-    header_bounds = (-1906, 189, 1900, 22)
-    run(scroll_bounds, header_bounds)
+    # scroll_bounds = (-1906, 210, 1900, 819)
+    # header_bounds = (-1906, 189, 1900, 22)
+    # run(scroll_bounds, header_bounds)
 
     # Prod coordinates
-    # scroll_bounds = (5216, 209, 1870, 827)
-    # header_bounds = (5215, 188, 1887, 20)
-    # run(scroll_bounds, header_bounds)
+    scroll_bounds = (5216, 209, 1870, 827)
+    header_bounds = (5215, 188, 1887, 20)
+    run(scroll_bounds, header_bounds)
 
 
 if __name__ == "__main__":
+    start_logger = logging.getLogger('main')
+    logging.basicConfig()
+    logging.root.setLevel(logging.NOTSET)
+    start_logger.setLevel(logging.INFO)
+
+    start_logger.info("Automation commencing")
+    os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    start_logger.info("Changed working directory to ../../src/main.py")
     sys.exit(main())

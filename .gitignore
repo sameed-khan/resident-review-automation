@@ -3,3 +3,9 @@
 src/__pycache__/
 
 mock/report_review.png
+test.png
+header.png
+tesseract_ocr/
+.env
+
+t*.png

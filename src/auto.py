@@ -3,18 +3,29 @@ auto.py
 Defines functions and utilities for performing the actual automation tasks.
 """
 
+import sys
 import time
+import logging
 
 import keyboard
+import re
 import mouse
 import numpy as np
 import pyperclip
 import win32clipboard as clipboard
 from mss import mss
 
-from screen_types import ScreenPoint
+from screen_types import ScreenPoint, ArrayPoint, array_to_screen
 from state import UiState
+from util import find_all_matches, find_first_match, compare_screens, is_ui_settled, find_top_k_matches
+import cv2
 
+auto_logger = logging.getLogger("auto")
+file_handler = logging.FileHandler("run.log")
+file_handler.setLevel(logging.DEBUG)
+
+console_handler = logging.StreamHandler(stream=sys.stdout)
+console_handler.setLevel(logging.INFO)
 
 def is_scrollable(
     scroll_bounds: tuple[int, int, int, int], match_threshold=0.95
@@ -102,62 +113,188 @@ def save_rtf_to_file(rtf_data, filename):
     with open(filename, "w") as file:
         file.write(rtf_data)
 
+def locate_score_button(state: UiState) -> np.ndarray[ScreenPoint]:
+    auto_logger.info("Locating report buttons")
+    score_buttons = [
+        "score_button.png",
+        "score_button_2.png",
+        "score_button_3.png",
+        "score_button_4.png",
+    ]
+    temp = []
+    for but in score_buttons:
+        template_path = f"template/{but}"
+        matches = find_all_matches(state.screen, template_path, threshold=0.9)
+        temp.extend(matches)
+    
+    final_matches = sorted([array_to_screen(state.current_monitor, array_coord) for array_coord in temp], key= lambda x: x[1])
+    auto_logger.debug(f"Located {len(final_matches)} report buttons at points: {final_matches}")
+    return np.array(final_matches)
+
+def open_report(location: ScreenPoint, state: UiState, template_path="template/report_textarea.png") -> None:
+    auto_logger.info("Opening report")
+    auto_logger.debug(f"Opening report: clicking at ({location[0]+10}, {location[1]+10})")
+    mouse.move(location[0]+10, location[1]+10)
+    time.sleep(0.5)
+    mouse.click()
+    is_ui_settled(state)
+    state.refresh()
+
+def locate_report_top_left(state: UiState, template_path="template/report_interface.png") -> tuple[ScreenPoint, int, int]:
+    h, w, _ = cv2.imread(template_path).shape
+    temp = find_first_match(state.screen, template_path)
+    report_top_left: ScreenPoint = array_to_screen(state.current_monitor, temp)
+    auto_logger.debug(f"Located report window top left at {report_top_left} with width {w} and height {h}")
+    return report_top_left, w, h
+
+def locate_highlight_start_point(state: UiState, template_path="template/highlight_start_point.png") -> ScreenPoint:
+    temp = find_first_match(state.screen, template_path)
+    highlight_top_left: ScreenPoint = array_to_screen(state.current_monitor, temp)
+    auto_logger.debug(f"Located highlight start point at {highlight_top_left}")
+    return highlight_top_left
+
+def locate_checkrows(state: UiState, template_path="template/version_checkrow.png") -> np.ndarray[ScreenPoint]:
+    temp: np.ndarray[ArrayPoint] = find_top_k_matches(state.screen, template_path, 2)
+    checkrow_locations: np.ndarray[ScreenPoint] = np.array(
+        sorted([array_to_screen(state.current_monitor, array_point) for array_point in temp], key=lambda x: x[1])
+    )
+    auto_logger.debug(f"Located two checkbox for attending and resident report respectively at {checkrow_locations}")
+    return checkrow_locations
+
+def highlight_report(state: UiState, start_point: ScreenPoint, report_top_left: ScreenPoint, window_width, window_height) -> None:
+    bottom_drag_end = ScreenPoint((report_top_left[0] + window_width // 2, report_top_left[1] + window_height + 20))
+    auto_logger.info("Start highlighting report")
+    mouse.move(start_point[0] + 3, start_point[1])
+    mouse.press()
+    mouse.move(bottom_drag_end[0], bottom_drag_end[1], duration=1)
+    auto_logger.info("Reached bottom of highlighting report, waiting for scrolling to finish")
+    is_ui_settled(state)
+    mouse.move(0, -40, absolute=False, duration=0.5)  # Drag back up into interface
+    mouse.release()
+    auto_logger.info("Report highlighting complete")
+
+def copy_and_save(key: str, state: UiState):
+    auto_logger.info("Starting to copy and save report text")
+    keyboard.send('ctrl+c')
+    report = pyperclip.paste()
+    dic = {}
+    dic[key] = report
+    state.data.append(dic)
+    auto_logger.info("Report text copied to UI state")
+    auto_logger.debug(f"Copied text {report} to UI state")
+
+def copy_one_report(state: UiState) -> None:
+    rtl, w, h = locate_report_top_left(state)
+    highlight_start_point = locate_highlight_start_point(state)
+    checkrow_locations = locate_checkrows(state)
+    attending_row = checkrow_locations[0]
+    resident_row = checkrow_locations[1]
+
+    # Click off the attending row to get resident report
+    mouse.move(attending_row[0]+5, attending_row[1]+10)
+    mouse.click()
+    time.sleep(3)
+
+    # Highlight the report
+    highlight_report(state, highlight_start_point, rtl, w, h)
+    copy_and_save("resident", state)
+
+    # Get attending report
+    mouse.move(resident_row[0]+5, resident_row[1]+10)
+    mouse.click()
+
+    mouse.move(attending_row[0]+5, attending_row[1]+10)
+    mouse.click()
+    time.sleep(3)
+
+    # Highlight new report
+    highlight_report(state, highlight_start_point, rtl, w, h)
+    copy_and_save("attending", state)
+
+    # Close report
+    auto_logger.info("Closing report")
+    mouse.click()  # bring back focus to the report interface
+    keyboard.send('alt+f4')
+    state.refresh()
+
+def scroll_check(state: UiState) -> bool:
+    """
+    Returns True if scroll was executed
+    """
+    auto_logger.info("Checking if scrollable (are we at bottom of window?)")
+    state.refresh()
+    before_scroll = state.screen  # Save for comparison
+    keyboard.send("page down")
+    time.sleep(2)
+    state.refresh()
+    after_scroll = state.screen
+    result = not compare_screens(before_scroll, after_scroll)
+    auto_logger.info(f"Interface scrollable: {result}")
+    return result
 
 def run(scroll_bounds: ScreenPoint, header_bounds: ScreenPoint):
     """
     Main function to run the automation tasks.
     """
-    # TODO: validate that AppState scroll and header bounds are correct
-
-    counter = 0
+    debug_iter = True
     ui_state = UiState(scroll_bounds, header_bounds)
+    next_button = "template/next_button.png"
+    no_further_scrolling = False
+    second_iteration_on_page = False
+    next_button_flag = True
+
     while True:
-        button_locs = [
-            x["Score"]["textstart"]
-            for x in ui_state.table
-            if x is not None and not x["state"]["clicked"]
-        ]
-        button_locs = [x for x in button_locs if x is not None]
+        auto_logger.info("Start of iteration, finding report buttons on screen")
+        button_locs = locate_score_button(ui_state)
 
-        for idx, loc in enumerate(button_locs):
-            print("Clicking!")
-            mouse.move(loc[0], loc[1])
-            mouse.click()
-            time.sleep(0.5)
+        if second_iteration_on_page:
+            auto_logger.info("Starting iteration after page down, getting only last 5 rows")
+            button_locs = button_locs[-5:]
+            second_iteration_on_page = False
 
-            # Report review window should pop up now
-            print("Testing reviewing report, matchTemplating...")
-            # report_template = cv.imread("../template/report_textarea.png", cv.IMREAD_GRAYSCALE)
-            # with mss() as sct:
-            #     screenshot = sct.grab(sct.monitors[1])
-            #     frame = np.array(screenshot)[:, :, :3]
+        if debug_iter:
+            button_locs = button_locs[-1:]
+            debug_iter = False
 
-            # t = cv.matchTemplate(frame, report_template, cv.TM_CCOEFF_NORMED)
-            # mouse_loc = cv.minMaxLoc(t)[3]
-            # mouse.move(mouse_loc[0] + 20, mouse_loc[1] + 20)
-            # copy_to_clipboard()
-            # rtf_data = get_clipboard_rtf()
-            # save_rtf_to_file(rtf_data, f"report_{counter}.rtf")
-            counter += 1
+        for loc in button_locs:
+            open_report(loc, ui_state)
+            copy_one_report(ui_state)
 
-            # Close the report review window
-            print("Testing closing report window...")
-            # multiple_keypress(["alt", "f4"])
+        auto_logger.info("Writing data to JSON output")
+        ui_state.save()
+        time.sleep(2)
 
-            # Click in center of screen to bring focus back to main window
-            scx, scy, sc_width, sc_height = scroll_bounds
-            midpoint = (scx + sc_width // 2, scy + sc_height // 2)
-            mouse.move(*midpoint)
-            mouse.click("left")
-            time.sleep(0.5)
-
-            # Mark the row as clicked
-            ui_state.table[idx]["state"]["clicked"] = True
-
-        if not is_scrollable(scroll_bounds):  # this pages down!
-            break
+        ## Checks
+        # If we cannot scroll down then we are at the bottom
+        if not scroll_check(ui_state):
+            no_further_scrolling = True
         else:
-            ui_state.refresh()  # update the table state after a page down
+            second_iteration_on_page = True
 
-        if counter >= 100:
-            raise Exception("Infinite loop, stopping...")
+        if no_further_scrolling:
+            auto_logger.info("Hit bottom of screen and iteration concluded. Finding 'Next' button")
+            nxb_arrtl = find_first_match(ui_state.screen, next_button, threshold=0.9)
+            if nxb_arrtl is None:
+                auto_logger.info("Next button was not found. This is the final screen. Exiting application.")
+                break
+            auto_logger.info("Next button found, clicking and waiting for UI update")
+            nxb_sctl = array_to_screen(ui_state.current_monitor, nxb_arrtl)
+            mouse.move(nxb_sctl[0]+3, nxb_sctl[1]+3)
+            time.sleep(1)  # wait for highlight off row to fade
+            ui_state.refresh()
+            old_screen = ui_state.screen
+            mouse.click()
+
+            # Continue to wait until new page loads
+            auto_logger.info("Waiting for UI update")
+            while True:
+                time.sleep(1)
+                ui_state.refresh()
+                new_screen = ui_state.screen
+                if not compare_screens(old_screen, new_screen, tolerance=0.99):
+                    auto_logger.info("UI successfully updated, scrolling to top of page")
+                    break
+
+            mouse.click()
+            keyboard.send("page up")
+            no_further_scrolling = False

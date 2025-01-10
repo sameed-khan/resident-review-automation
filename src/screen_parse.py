@@ -1,13 +1,16 @@
 """
 Module with functions for performing OCR and parsing scroll zone on screen to produce a table.
 """
-
+import os
+import pytesseract as pyts
+import cv2
 from copy import deepcopy
 from math import ceil
 
 import cv2 as cv
 import numpy as np
-from winocr import recognize_cv2_sync
+from winocr import recognize_cv2_sync, recognize_cv2
+import pandas as pd
 
 from screen_types import ArrayCoord, ArrayPoint
 
@@ -67,57 +70,14 @@ def hough_to_cartesian(lines, img_shape, orientation="both", angle_threshold=1):
 
     return cartesian_lines
 
-
-# def find_columns(img, bounds, cell_min_width=50):
-#     x, y, width, height = bounds
-#     header = img[y : y + height, x : x + width]
-#     header_edges = cv.Canny(header, 50, 100)
-#     kernel = np.ones((3, 3), np.uint8)
-#     header_edges = cv.morphologyEx(header_edges, cv.MORPH_CLOSE, kernel)
-#     vpp = np.sum(header_edges, axis=0)
-#     thresh = np.percentile(vpp, 99)
-#     peaks = np.argwhere(vpp >= thresh).flatten()
-
-#     # Filter out adjacent columns
-#     peaks = peaks[np.where(np.diff(peaks) > cell_min_width)[0] + 1]
-
-#     ff = Image.fromarray(header_edges)
-#     ff.save("header.png")
-
-#     # Add start and end points if the image did not grab them
-#     if peaks[0] > cell_min_width:
-#         peaks = np.insert(peaks, 0, 0)
-#     if peaks[-1] < width - cell_min_width:
-#         peaks = np.append(peaks, width)
-
-#     columns = np.array(
-#         [(int(peak_x + x), y, int(peak_x + x), img.shape[0]) for peak_x in peaks]
-#     )
-
-#     # ensure sorted from left to right
-#     columns = columns[columns[:, 0].argsort()]
-#     return columns
-
-
 def find_columns(
     header_region: np.ndarray,
 ) -> tuple[np.ndarray, dict[str, None]]:
-    expanded_header = cv.resize(header_region, (0, 0), fx=2, fy=2)
-    header_text = recognize_cv2_sync(expanded_header)
-    lines = header_text["lines"]
-    columns = []
-    schema = {}
+    preproc_header = preprocess_image(header_region)
+    header_df = pyts.image_to_data(preproc_header, config=os.getenv("TESS_CONFIG"), output_type=pyts.Output.DATAFRAME)
+    columns, schema = process_dataframe(header_df)
 
-    for line in lines:
-        word = line["words"][0]
-        x1 = word["bounding_rect"]["x"] // 2
-        columns.append(
-            [x1 - 5, 0, x1 - 5, 1080]
-        )  # 1080 is the height of the screen (hardcoded)
-        schema[line["text"]] = {"data": None, "coordinate": None, "textstart": None}
-
-    return np.array(columns), schema
-
+    return columns, schema
 
 def find_rows(img, bounds):
     x, y, width, height = bounds
@@ -192,38 +152,6 @@ def generate_table(
     columns, schema = find_columns(header_area)
     rows = find_rows(table_img, scroll_bounds)
     intersections = compute_intersections(rows, columns)
-
-    # Map to text
-    # expanded_header = cv.resize(header_area, (0, 0), fx=2, fy=2)
-    # header_text = recognize_cv2_sync(expanded_header)
-    # lines = header_text["lines"]
-    # words = []
-    # rects = []
-    # for line in lines:
-    #     for word in line["words"]:
-    #         words.append(word["text"])
-    #         rects.append(
-    #             [
-    #                 word["bounding_rect"]["x"] // 2,
-    #                 word["bounding_rect"]["y"] // 2,
-    #                 word["bounding_rect"]["width"] // 2,
-    #                 word["bounding_rect"]["height"] // 2,
-    #             ]
-    #         )
-    # rects = np.array(rects) + np.array(header_bounds)
-    # rects = rects[:, :2]
-    # t = intersections[None, :, :, :] - rects[:, None, None, :]
-    # tl = (t * np.array([-1, -1])[None, None, None, :]).prod(axis=-1)
-    # fidx = np.where(tl > 0, tl, np.inf).reshape(len(rects), -1).argmin(axis=1)
-    # hcoords = np.array(np.unravel_index(fidx, tl.shape[1:])).T
-
-    # schema = {"index": None, "state": {}}
-    # relcoords = hcoords[:, 1].flatten()
-    # for i in range(len(columns)):
-    #     x = relcoords - i
-    #     ii = np.where(x == 0)[0]
-    #     colname = "_".join(np.array(words)[ii])
-    #     schema[colname] = {"data": None, "coordinate": None, "textstart": None}
 
     # Get content
     content_bounds = (
@@ -318,3 +246,39 @@ def is_contained(container, rect):
         and rect_left + rect_width <= container["left"] + container["width"]
         and rect_top + rect_height <= container["top"] + container["height"]
     )
+
+def preprocess_image(image_arr: np.ndarray) -> np.ndarray:
+    gray = cv2.cvtColor(image_arr, cv2.COLOR_BGR2GRAY)
+    thresh = cv2.threshold(gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)[1]
+    # Optional: Denoising, blurring, or sharpening
+    # blurred = cv2.GaussianBlur(gray, (5, 5), 0)
+    # sharpened = cv2.filter2D(gray, -1, kernel)
+
+    return thresh
+
+def process_dataframe(df: pd.DataFrame):
+    # Clean the dataframe
+    df = df.dropna(subset=['text'])
+    df['text'] = df['text'].str.replace(r'[^a-zA-Z\s]', '', regex=True).str.lower()
+    
+    # Initialize outputs
+    tuples = []
+    text_dict = {}
+    
+    i = 0
+    while i < len(df):
+        current_left = df.iloc[i]['left']
+        current_text = df.iloc[i]['text']
+        
+        # Check if next row exists and is within 50 units
+        if i + 1 < len(df) and abs(df.iloc[i + 1]['left'] - current_left) <= 50:
+            combined_text = f"{current_text}_{df.iloc[i + 1]['text']}"
+            tuples.append([current_left, 0, current_left, 1080])
+            text_dict[combined_text] = None
+            i += 2
+        else:
+            tuples.append([current_left, 0, current_left, 1080])
+            text_dict[current_text] = None
+            i += 1
+    
+    return np.array(tuples), text_dict

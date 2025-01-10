@@ -6,6 +6,7 @@ Exposes UiState class which manages the table and scroll area state.
 import mss.tools
 import numpy as np
 from mss import mss
+import json
 
 from screen_parse import generate_table, is_contained
 from screen_types import (
@@ -39,29 +40,8 @@ class UiState:
             )  # exclude 0th "monitor" which is the entire screen
             frame = np.array(screenshot)[:, :, :3]  # BGRA -> RGB
 
-        array_scroll_bounds = self.convert_bounds(scroll_bounds)
-        array_header_bounds = self.convert_bounds(header_bounds)
-
-        self.table = generate_table(frame, array_scroll_bounds, array_header_bounds)
-        for row in self.table:
-            row["state"]["identifier"] = "Accession"
-            row["state"]["clicked"] = False
-
-            for key in row:
-                # Convert array coordinates to monitor coordinates
-                if key not in ["state", "index"]:
-                    old_coord = row[key]["coordinate"]
-                    oldtextstart = row[key]["textstart"]
-                    if old_coord is not None:
-                        new_coord = array_to_screen(
-                            self.current_monitor, ArrayPoint(old_coord)
-                        )
-                        row[key]["coordinate"] = new_coord
-                    if oldtextstart is not None:
-                        new_textstart = array_to_screen(
-                            self.current_monitor, ArrayPoint(oldtextstart)
-                        )
-                        row[key]["textstart"] = new_textstart
+        self.screen = frame
+        self.data = []
 
     def refresh(self):
         """Updates the internal table state based on new elements on screen"""
@@ -70,38 +50,11 @@ class UiState:
                 self.current_monitor
             )  # Invariant: application always stays on the same screen
             frame = np.array(screenshot)[:, :, :3]
+        self.screen = frame
 
-        array_scroll_bounds = self.convert_bounds(self.scroll_bounds)
-        array_header_bounds = self.convert_bounds(self.header_bounds)
-        new_table = generate_table(frame, array_scroll_bounds, array_header_bounds)
-
-        identifier = self.table[0]["state"]["identifier"]
-        old_ids = [x[identifier] for x in self.table]
-
-        commit_table = []
-        for idx, row in enumerate(new_table):
-            for key in row:
-                if key not in ["state", "index"]:
-                    old_coord = row[key]["coordinate"]
-                    oldtextstart = row[key]["textstart"]
-                    if old_coord is not None:
-                        new_coord = array_to_screen(
-                            self.current_monitor, ArrayPoint(old_coord)
-                        )
-                        row[key]["coordinate"] = new_coord
-                    if oldtextstart is not None:
-                        new_textstart = array_to_screen(
-                            self.current_monitor, ArrayPoint(oldtextstart)
-                        )
-                        row[key]["textstart"] = new_textstart
-
-            if row[identifier] in old_ids:
-                commit_table.append(self.table[idx])
-                continue
-
-            commit_table.append(row)
-
-        self.table = commit_table
+    def save(self):
+        with open("output.json", "w") as f:
+            json.dump(self.data, f, indent=2)
 
     def convert_bounds(
         self, bounds: tuple[ScreenCoord, ScreenCoord, int, int]
