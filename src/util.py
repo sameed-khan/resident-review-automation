@@ -79,3 +79,39 @@ def is_ui_settled(state: UiState, capture_interval=0.2, poll_interval=1):
         
         if compare_screens(screen1, screen2, tolerance=1.0):
             break
+
+def wait_for_appearance(state: UiState, template_path: str, timeout=10, poll_interval=0.5, threshold=0.8):
+    template = cv2.imread(template_path)
+    template_gray = cv2.cvtColor(template, cv2.COLOR_BGR2GRAY)
+    while timeout > 0:
+        state.refresh()
+        screen = state.screen
+        screen_gray = cv2.cvtColor(screen, cv2.COLOR_BGR2GRAY)
+        result = cv2.matchTemplate(screen_gray, template_gray, cv2.TM_CCOEFF_NORMED)
+        _, conf, _, _ = cv2.minMaxLoc(result)
+
+        if conf > threshold:
+            return
+
+        time.sleep(poll_interval)
+        timeout -= poll_interval
+
+    raise TimeoutError(f"Timeout of {timeout} exceeded waiting for {template_path} to appear")
+
+def validate_state(state: UiState, action: callable, isChanged=True, timeout=10, interval=0.5):
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        state.refresh()
+        before_state = state.screen
+        action()
+        time.sleep(interval)
+        state.refresh()
+        after_state = state.screen
+        if isChanged:
+            if not compare_screens(before_state, after_state):
+                return
+        else:
+            if compare_screens(before_state, after_state):
+                return
+
+    raise TimeoutError(f"State did not achieve isChanged {isChanged} within {timeout} seconds")

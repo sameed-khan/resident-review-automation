@@ -8,14 +8,14 @@ dependencies = [
     "ipykernel>=6.29.5",
     "opencv-python>=4.10.0.84",
     "matplotlib>=3.9.2",
-    "winocr>=0.0.14",
     "mss>=9.0.2",
     "keyboard>=0.13.5",
     "mouse>=0.7.1",
     "pyautogui>=0.9.54",
     "pyperclip>=1.9.0",
     "pywin32>=308",
-    "pyqt6>=6.7.1",
+    "pytesseract>=0.3.13",
+    "dotenv>=0.9.9",
 ]
 
 [tool.uv]

@@ -9,3 +9,7 @@ tesseract_ocr/
 .env
 
 t*.png
+
+# Contains PHI
+logs/
+*.json

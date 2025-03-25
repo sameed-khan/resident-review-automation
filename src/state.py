@@ -8,7 +8,8 @@ import numpy as np
 from mss import mss
 import json
 
-from screen_parse import generate_table, is_contained
+from screen_parse import is_contained
+
 from screen_types import (
     ArrayPoint,
     ScreenCoord,
