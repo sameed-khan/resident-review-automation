@@ -1,6 +1,5 @@
 import os
 import sys
-import pytesseract as pyts
 import logging
 import signal
 import time
@@ -15,7 +14,6 @@ from logging_config import setup_logger
 
 def main():
     load_dotenv()
-    pyts.pytesseract.tesseract_cmd=os.getenv("TESSERACT_LOCATION")
 
     # Dirty coordinates
     # scroll_bounds = (13, 186, 1872, 843)

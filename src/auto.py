@@ -12,15 +12,14 @@ import re
 import mouse
 import numpy as np
 import pyperclip
-import win32clipboard as clipboard
 from mss import mss
 
 from screen_types import ScreenPoint, ArrayPoint, array_to_screen
 from logging_config import setup_logger
 from state import UiState
 from util import (
-    find_all_matches, find_first_match, 
-    compare_screens, is_ui_settled, find_top_k_matches, 
+    find_all_matches, find_first_match,
+    compare_screens, is_ui_settled, find_top_k_matches,
     validate_state, wait_for_appearance
 )
 import cv2
@@ -102,18 +101,6 @@ def copy_to_clipboard():
     multiple_keypress(["ctrl", "c"])
 
 
-def get_clipboard_rtf():
-    clipboard.OpenClipboard()
-    try:
-        if clipboard.IsClipboardFormatAvailable(clipboard.CF_RTF):
-            rtf_data = clipboard.GetClipboardData(clipboard.CF_RTF)
-        else:
-            rtf_data = None
-    finally:
-        clipboard.CloseClipboard()
-    return rtf_data
-
-
 def save_rtf_to_file(rtf_data, filename):
     with open(filename, "w") as file:
         file.write(rtf_data)
@@ -132,7 +119,7 @@ def locate_score_button(state: UiState) -> np.ndarray[ScreenPoint]:
         template_path = f"template/{but}"
         matches = find_all_matches(state.screen, template_path, threshold=0.9)
         temp.extend(matches)
-    
+
     final_matches = sorted([array_to_screen(state.current_monitor, array_coord) for array_coord in temp], key= lambda x: x[1])
     logger.debug(f"Located {len(final_matches)} report buttons at points: {final_matches}")
     return np.array(final_matches)
@@ -270,8 +257,24 @@ def run(scroll_bounds: ScreenPoint, header_bounds: ScreenPoint):
             debug_iter = False
 
         for loc in button_locs:
-            open_report(loc, ui_state)
-            copy_one_report(ui_state)
+            try:
+                open_report(loc, ui_state)
+            except Exception as e:
+                logger.error(f"Error processing report corresponding to button at {loc}: {e}")
+                ui_state.data.append({"error": f"{e}"})
+                continue
+            try:
+                copy_one_report(ui_state)
+            except Exception as e:
+                logger.error(f"Error processing report corresponding to button at {loc}: {e}")
+                ui_state.data.append({"error": f"{e}"})
+                logger.info("Closing report")
+                mouse.move(*NEUTRAL_CLICK_ZONE)
+                mouse.click()  # bring back focus to the report interface
+                keyboard.send('alt+f4')
+                time.sleep(2)
+                ui_state.refresh()
+                continue
 
         logger.info("Writing data to JSON output")
         ui_state.save()

@@ -13,3 +13,9 @@ t*.png
 # Contains PHI
 logs/
 *.json
+
+# Build
+dist/
+build/
+*.zip
+*.spec
