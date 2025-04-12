@@ -41,4 +41,8 @@ if __name__ == "__main__":
     logger.info("Automation commencing")
     os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     logger.info("Changed working directory to ../../src/main.py")
-    sys.exit(main())
+
+    try:
+        main()
+    except Exception as e:
+        logger.error(f"Error in main function: {e}")

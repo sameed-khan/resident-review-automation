@@ -28,6 +28,9 @@ function Test-CommandExists {
 # Set the error action preference to stop
 $ErrorActionPreference = "Stop"
 
+# Check if the script is being run directly (not from an existing PowerShell session)
+$runningInteractively = [Environment]::UserInteractive -and !$psISE -and $Host.Name -eq 'ConsoleHost'
+
 # Display welcome message
 Write-Status "Starting installation and setup for Resident Read Review Tool..." "Cyan"
 Write-Status "This script will check for UV, install it if needed, sync packages, and run the application." "Cyan"
@@ -126,5 +129,18 @@ try {
 catch {
     Write-Status "An error occurred: $_" "Red"
     Write-Status "Stack trace: $($_.ScriptStackTrace)" "Red"
+
+    # Keep window open if running directly
+    if ($runningInteractively) {
+        Write-Status "Press any key to exit..." "Yellow"
+        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    }
+
     exit 1
+}
+
+# Keep window open at the end if running directly
+if ($runningInteractively) {
+    Write-Status "Script has completed. Press any key to exit..." "Yellow"
+    $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 }
