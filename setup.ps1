@@ -105,7 +105,8 @@ try {
     Write-Status "Packages installed successfully." "Green"
 
     # Check if main.py exists
-    $mainPath = Join-Path $scriptDir "src" "main.py"
+    $srcPath = Join-Path $scriptDir "src"
+    $mainPath = Join-Path $srcPath "main.py"
     if (-not (Test-Path $mainPath)) {
         Write-Status "main.py not found at $mainPath. Please ensure the project structure is correct." "Red"
         exit 1
@@ -116,7 +117,8 @@ try {
     Write-Status "Running: python src/main.py" "Cyan"
 
     # Activate the virtual environment and run the script
-    & ".\.venv\Scripts\python.exe" "src\main.py"
+    # Using the call operator (&) and enclosing the path in quotes to handle paths with spaces
+    & ".\.venv\Scripts\python.exe" ".\src\main.py"
 
     # Check if the script ran successfully
     if ($LASTEXITCODE -ne 0) {
@@ -124,7 +126,7 @@ try {
         exit 1
     }
 
-    Write-Status "Application completed successfully." "Green"
+    Write-Status "Application completed." "Yellow"
 }
 catch {
     Write-Status "An error occurred: $_" "Red"

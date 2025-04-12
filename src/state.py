@@ -30,6 +30,8 @@ class UiState:
 
         # Find current monitor based on which screen contains the scroll bounds
         with mss() as sct:
+            if len(sct.monitors) < 4:
+                raise ValueError("There are less than 3 monitors present")
             contains_screenbounds = [
                 is_contained(screen, scroll_bounds) for screen in sct.monitors[1:]
             ]
