@@ -5,17 +5,30 @@ description = "GUI Automation tool to collate resident reads from Sectra interfa
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+
     "ipykernel>=6.29.5",
+
     "opencv-python>=4.10.0.84",
+
     "matplotlib>=3.9.2",
+
     "mss>=9.0.2",
+
     "keyboard>=0.13.5",
+
     "mouse>=0.7.1",
+
     "pyautogui>=0.9.54",
+
     "pyperclip>=1.9.0",
+
     "pywin32>=308",
+
     "pytesseract>=0.3.13",
+
     "dotenv>=0.9.9",
+
+    "python-docx>=1.1.2",
 ]
 
 [tool.uv]

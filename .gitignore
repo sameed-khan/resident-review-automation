@@ -13,6 +13,7 @@ t*.png
 # Contains PHI
 logs/
 *.json
+*.docx
 
 # Build
 dist/
