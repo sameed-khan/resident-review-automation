@@ -14,6 +14,7 @@ t*.png
 logs/
 *.json
 *.docx
+screen_text_grid/*
 
 # Build
 dist/

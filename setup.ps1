@@ -49,6 +49,7 @@ try {
             # Install UV using the recommended command from docs.astral.sh/uv
             Write-Status "Running UV installer..." "Yellow"
             powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+            $env:Path="$env:USERPROFILE\.local\bin;$env:Path"
 
             # Check if UV was installed successfully
             if (Test-CommandExists "uv") {

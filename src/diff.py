@@ -1,10 +1,10 @@
 import re
 import json
 import difflib
-import re
 from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_COLOR_INDEX, WD_ALIGN_PARAGRAPH
+import pdb
 
 KEYS = [
     "STUDY", "INDICATION", "COMPARISON", "ACCESSION NUMBER(S)", "ORDERING CLINICIAN",
@@ -101,37 +101,6 @@ def preprocess_text(text):
     # Restore paragraph breaks
     text = text.replace('. ', '.\n')
     return text
-
-def get_intelligent_diff(text1, text2):
-    """
-    Generate an intelligent diff between two text strings.
-    Returns a list of (text, format) tuples where format indicates
-    whether text should be normal, strikethrough, or added.
-    """
-    # Preprocess both texts
-    text1 = preprocess_text(text1)
-    text2 = preprocess_text(text2)
-
-    # If they're identical (after preprocessing), return early
-    if text1 == text2:
-        return [("(NO CORRECTIONS MADE)", "normal")]
-
-    # Use SequenceMatcher for intelligent comparison
-    matcher = difflib.SequenceMatcher(None, text1, text2)
-
-    result = []
-    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-        if tag == 'equal':
-            result.append((text1[i1:i2], "normal"))
-        elif tag == 'delete':
-            result.append((text1[i1:i2], "delete"))
-        elif tag == 'insert':
-            result.append((text2[j1:j2], "insert"))
-        elif tag == 'replace':
-            result.append((text1[i1:i2], "delete"))
-            result.append((text2[j1:j2], "insert"))
-
-    return result
 
 def improve_diff_quality(text1, text2):
     """
@@ -232,6 +201,78 @@ def improve_diff_quality(text1, text2):
 
     return result
 
+def group_diff_results(diff_results):
+    """
+    Group adjacent diff elements with the same format type.
+    This will combine consecutive deletions and insertions into single runs.
+    """
+    if not diff_results:
+        return []
+    
+    grouped_results = []
+    current_text = diff_results[0][0]
+    current_format = diff_results[0][1]
+    
+    for text, format_type in diff_results[1:]:
+        if format_type == current_format:
+            # Same format type, append to current group
+            current_text += text
+        else:
+            # Different format, add the current group and start a new one
+            grouped_results.append((current_text, current_format))
+            current_text = text
+            current_format = format_type
+    
+    # Add the last group
+    grouped_results.append((current_text, current_format))
+    
+    return grouped_results
+
+def reorder_diff_results(diff_results):
+    """
+    Reorder diff results to show all deletions before insertions within a replaced section.
+    This creates a more natural reading flow for edits.
+    """
+    reordered_results = []
+    deletion_buffer = []
+    insertion_buffer = []
+    normal_buffer = []
+    
+    for text, format_type in diff_results:
+        if format_type == "normal":
+            # If we have pending deletions/insertions, flush them
+            if deletion_buffer or insertion_buffer:
+                reordered_results.extend(deletion_buffer)
+                reordered_results.extend(insertion_buffer)
+                deletion_buffer = []
+                insertion_buffer = []
+            
+            # Add the normal text
+            normal_buffer.append((text, format_type))
+        elif format_type == "delete":
+            # If we have pending normal text, add it first
+            if normal_buffer:
+                reordered_results.extend(normal_buffer)
+                normal_buffer = []
+            
+            # Buffer deletions
+            deletion_buffer.append((text, format_type))
+        elif format_type == "insert":
+            # If we have pending normal text, add it first
+            if normal_buffer:
+                reordered_results.extend(normal_buffer)
+                normal_buffer = []
+            
+            # Buffer insertions
+            insertion_buffer.append((text, format_type))
+    
+    # Add any remaining buffers
+    reordered_results.extend(normal_buffer)
+    reordered_results.extend(deletion_buffer)
+    reordered_results.extend(insertion_buffer)
+    
+    return reordered_results
+
 def process_report_pair(resident, attending, doc):
     """Process a single resident-attending report pair and add to document."""
     # Add header
@@ -267,6 +308,10 @@ def process_report_pair(resident, attending, doc):
 
     # Generate diff for FINDINGS
     findings_diff = improve_diff_quality(resident_findings, attending_findings)
+    
+    # Group and reorder diff results
+    findings_diff = group_diff_results(findings_diff)
+    findings_diff = reorder_diff_results(findings_diff)
 
     # Add FINDINGS diff to document
     if findings_diff == [("(NO CORRECTIONS MADE)", "normal")]:
@@ -292,6 +337,10 @@ def process_report_pair(resident, attending, doc):
 
     # Generate diff for IMPRESSION
     impression_diff = improve_diff_quality(resident_impression, attending_impression)
+    
+    # Group and reorder diff results
+    impression_diff = group_diff_results(impression_diff)
+    impression_diff = reorder_diff_results(impression_diff)
 
     # Add IMPRESSION diff to document
     if impression_diff == [("(NO CORRECTIONS MADE)", "normal")]:
@@ -342,7 +391,7 @@ def create_comparison_document_improved(data, output_file):
     doc.save(output_file)
     print(f"Document saved to {output_file}")
 
-def main():
+def generate_diff_doc():
     """Main function to run the program."""
     input_file = "output.json"
     output_file = "report_comparisons.docx"
@@ -361,4 +410,4 @@ def main():
         print(f"Error: {e}")
 
 if __name__ == "__main__":
-    main()
+    generate_diff_doc()

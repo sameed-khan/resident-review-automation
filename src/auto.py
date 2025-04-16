@@ -22,6 +22,8 @@ from util import (
     compare_screens, is_ui_settled, find_top_k_matches,
     validate_state, wait_for_appearance
 )
+from diff import generate_diff_doc
+from pathlib import Path
 import cv2
 
 logger = setup_logger(__name__)
@@ -155,14 +157,14 @@ def locate_checkrows(state: UiState, template_path="template/version_checkrow.pn
     return checkrow_locations
 
 def highlight_report(state: UiState, start_point: ScreenPoint, report_top_left: ScreenPoint, window_width, window_height) -> None:
-    bottom_drag_end = ScreenPoint((report_top_left[0] + window_width // 2, report_top_left[1] + window_height + 20))
+    bottom_drag_end = ScreenPoint((report_top_left[0] + window_width // 2, report_top_left[1] + window_height + 70))
     logger.info("Start highlighting report")
     mouse.move(start_point[0] + 3, start_point[1])
     mouse.press()
     mouse.move(bottom_drag_end[0], bottom_drag_end[1], duration=1)
     logger.info("Reached bottom of highlighting report, waiting for scrolling to finish")
     is_ui_settled(state)
-    mouse.move(0, -80, absolute=False, duration=0.5)  # Drag back up into interface
+    mouse.move(0, -120, absolute=False, duration=0.5)  # Drag back up into interface
     mouse.release()
     time.sleep(0.5)
     logger.info("Report highlighting complete")
@@ -201,6 +203,7 @@ def copy_one_report(state: UiState) -> None:
     # Get attending report
     mouse.move(resident_row[0]+5, resident_row[1]+10)
     mouse.click()
+    time.sleep(3)
 
     mouse.move(attending_row[0]+5, attending_row[1]+10)
     mouse.click()
@@ -231,6 +234,29 @@ def scroll_check(state: UiState) -> bool:
     logger.info(f"Interface scrollable: {result}")
     return result
 
+def copy_screen(iteration: int, second_screen: bool) -> None:
+    """
+    Copies all text on screen for potential later matching to report output
+    """
+    logger.info("Copying screen grid")
+    mouse.move(*NEUTRAL_CLICK_ZONE)
+    mouse.click()
+    time.sleep(0.2)
+    keyboard.send("ctrl+a")
+    time.sleep(0.5)
+
+    pyperclip.copy("")
+    keyboard.send("ctrl+c")
+    screen_text = pyperclip.paste()
+
+    filename = f"screenpaste_{iteration}{'_part2' if second_screen else ''}.txt"
+    with open(Path("screen_text_grid") / Path(filename), "w") as fp:
+        fp.write(screen_text)
+
+    mouse.click()
+    time.sleep(0.5)
+
+
 def run(scroll_bounds: ScreenPoint, header_bounds: ScreenPoint):
     """
     Main function to run the automation tasks.
@@ -242,10 +268,12 @@ def run(scroll_bounds: ScreenPoint, header_bounds: ScreenPoint):
     no_further_scrolling = False
     second_iteration_on_page = False
     next_button_flag = True
+    screen_counter = 0
 
     while True:
         logger.info("Start of iteration, finding report buttons on screen")
         button_locs = locate_score_button(ui_state)
+        copy_screen(screen_counter, second_iteration_on_page)
 
         if second_iteration_on_page:
             logger.info("Starting iteration after page down, getting only last 5 rows")
@@ -317,3 +345,6 @@ def run(scroll_bounds: ScreenPoint, header_bounds: ScreenPoint):
             # Keep hitting page up until we hit top of screen and nothing changes
             validate_state(ui_state, lambda: keyboard.send("page up"), isChanged=False)
             no_further_scrolling = False
+
+    logger.info("Writing to word doc: report_comparisons.docx")
+    generate_diff_doc()
