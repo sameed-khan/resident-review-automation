@@ -1,5 +1,7 @@
 import time
 import cv2
+import pyperclip
+import keyboard
 import numpy as np
 from screen_types import ArrayPoint
 from state import UiState
@@ -115,3 +117,22 @@ def validate_state(state: UiState, action: callable, isChanged=True, timeout=10,
                 return
 
     raise TimeoutError(f"State did not achieve isChanged {isChanged} within {timeout} seconds")
+
+def wait_for_paste(timeout: int) -> str:
+    """
+    Tries to copy text from screen over and over until timeout expires
+    """
+    pyperclip.copy("")
+    start_time = time.time()
+    while True:
+        keyboard.send('ctrl+c')
+        report = pyperclip.paste()
+        if report:
+            return report
+
+        time.sleep(0.1)
+
+        if time.time() > start_time + timeout:
+            raise TimeoutError(f"Waiting for copy operation timed out after {timeout} seconds")
+
+        

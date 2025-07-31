@@ -8,12 +8,15 @@ from dataclasses import dataclass
 from enum import Enum, auto
 from typing import Callable, List, Optional
 from dotenv import load_dotenv
+from coordinate import AbsoluteCoordinate, RelativeCoordinate
 
 from auto import run
 from logging_config import setup_logger
 
 def main():
     load_dotenv()
+    print("Please position your mouse cursor in the center of the Fluency Report interface")
+    input("Press Enter to continue once the mouse is positioned correctly; do NOT click this interface or move your mouse")
 
     # Dirty coordinates
     # scroll_bounds = (13, 186, 1872, 843)
@@ -30,9 +33,10 @@ def main():
     # run(scroll_bounds, header_bounds)
 
     # Prod coordinates
-    scroll_bounds = (5216, 209, 1870, 827)
-    header_bounds = (5215, 188, 1887, 20)
-    run(scroll_bounds, header_bounds)
+    # scroll_bounds = (5216, 209, 1870, 827)
+    # header_bounds = (5215, 188, 1887, 20)
+
+    run()
 
 
 if __name__ == "__main__":
@@ -40,7 +44,7 @@ if __name__ == "__main__":
 
     logger.info("Automation commencing")
     os.chdir(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-    logger.info("Changed working directory to ../../src/main.py")
+    logger.info(f"Changed working directory to {os.getcwd()} (two dirs up from src/main.py)")
 
     try:
         main()

@@ -401,6 +401,9 @@ def generate_diff_doc():
         data = load_json_data(input_file)
         data = preprocess_json(data)
 
+        with open("output_preprocessed.json", "w") as j:
+            json.dump(data, j)
+
         # Create comparison document using improved algorithm
         create_comparison_document_improved(data, output_file)
 

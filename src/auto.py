@@ -20,18 +20,23 @@ from state import UiState
 from util import (
     find_all_matches, find_first_match,
     compare_screens, is_ui_settled, find_top_k_matches,
-    validate_state, wait_for_appearance
+    validate_state, wait_for_appearance, wait_for_paste
 )
 from diff import generate_diff_doc
 from pathlib import Path
 import cv2
 
+from constants import (
+    NEUTRAL_CLICK_ZONE,
+    HIGHLIGHT_START_POINT,
+    REPORT_WINDOW_TOP_LEFT,
+    REPORT_WINDOW_WIDTH,
+    REPORT_WINDOW_HEIGHT
+)
+
 logger = setup_logger(__name__)
 
 # Constant coordinates
-REPORT_WINDOW_RECT = (5667, 145, 1002, 827)
-HIGHLIGHT_START_POINT = (6010, 220)
-NEUTRAL_CLICK_ZONE = (5960, 430)
 
 def is_scrollable(
     scroll_bounds: tuple[int, int, int, int], match_threshold=0.95
@@ -171,8 +176,7 @@ def highlight_report(state: UiState, start_point: ScreenPoint, report_top_left: 
 
 def copy_and_save(key: str, state: UiState):
     logger.info("Starting to copy and save report text")
-    keyboard.send('ctrl+c')
-    report = pyperclip.paste()
+    report = wait_for_paste(5)
     dic = {}
     dic[key] = report
     state.data.append(dic)
@@ -184,9 +188,21 @@ def copy_and_save(key: str, state: UiState):
 def copy_one_report(state: UiState) -> None:
     # rtl, w, h = locate_report_top_left(state)
     # highlight_start_point = locate_highlight_start_point(state)
-    t, l, w, h = REPORT_WINDOW_RECT
+    neutral_click_zone = NEUTRAL_CLICK_ZONE.to_absolute(state.top_left)
+    report_window_top_left = REPORT_WINDOW_TOP_LEFT.to_absolute(state.top_left)
+    report_window_rect = (
+        report_window_top_left.x, 
+        report_window_top_left.y,
+        REPORT_WINDOW_WIDTH,
+        REPORT_WINDOW_HEIGHT
+    )
+
+    t, l, w, h = report_window_rect
     rtl = (t, l)
-    highlight_start_point = HIGHLIGHT_START_POINT
+
+    hsp = HIGHLIGHT_START_POINT.to_absolute(state.top_left)
+    highlight_start_point = (hsp.x, hsp.y)
+
     checkrow_locations = locate_checkrows(state)
     attending_row = checkrow_locations[0]
     resident_row = checkrow_locations[1]
@@ -194,6 +210,7 @@ def copy_one_report(state: UiState) -> None:
     # Click off the attending row to get resident report
     mouse.move(attending_row[0]+5, attending_row[1]+10)
     mouse.click()
+    mouse.move(*neutral_click_zone)
     time.sleep(3)
 
     # Highlight the report
@@ -203,10 +220,12 @@ def copy_one_report(state: UiState) -> None:
     # Get attending report
     mouse.move(resident_row[0]+5, resident_row[1]+10)
     mouse.click()
+    mouse.move(*neutral_click_zone)
     time.sleep(3)
 
     mouse.move(attending_row[0]+5, attending_row[1]+10)
     mouse.click()
+    mouse.move(*neutral_click_zone)
     time.sleep(3)
 
     # Highlight new report
@@ -234,12 +253,13 @@ def scroll_check(state: UiState) -> bool:
     logger.info(f"Interface scrollable: {result}")
     return result
 
-def copy_screen(iteration: int, second_screen: bool) -> None:
+def copy_screen(iteration: int, second_screen: bool, state: UiState) -> None:
     """
     Copies all text on screen for potential later matching to report output
     """
+    neutral_click_zone = NEUTRAL_CLICK_ZONE.to_absolute(state.top_left)
     logger.info("Copying screen grid")
-    mouse.move(*NEUTRAL_CLICK_ZONE)
+    mouse.move(*neutral_click_zone)
     mouse.click()
     time.sleep(0.2)
     keyboard.send("ctrl+a")
@@ -257,23 +277,24 @@ def copy_screen(iteration: int, second_screen: bool) -> None:
     time.sleep(0.5)
 
 
-def run(scroll_bounds: ScreenPoint, header_bounds: ScreenPoint):
+def run():
     """
     Main function to run the automation tasks.
     """
     debug_iter = False
 
-    ui_state = UiState(scroll_bounds, header_bounds)
+    ui_state = UiState()
     next_button = "template/next_button.png"
     no_further_scrolling = False
     second_iteration_on_page = False
     next_button_flag = True
     screen_counter = 0
+    neutral_click_zone = NEUTRAL_CLICK_ZONE.to_absolute(ui_state.top_left)
 
     while True:
         logger.info("Start of iteration, finding report buttons on screen")
         button_locs = locate_score_button(ui_state)
-        copy_screen(screen_counter, second_iteration_on_page)
+        copy_screen(screen_counter, second_iteration_on_page, ui_state)
 
         if second_iteration_on_page:
             logger.info("Starting iteration after page down, getting only last 5 rows")
@@ -297,7 +318,7 @@ def run(scroll_bounds: ScreenPoint, header_bounds: ScreenPoint):
                 logger.error(f"Error processing report corresponding to button at {loc}: {e}")
                 ui_state.data.append({"error": f"{e}"})
                 logger.info("Closing report")
-                mouse.move(*NEUTRAL_CLICK_ZONE)
+                mouse.move(*neutral_click_zone)
                 mouse.click()  # bring back focus to the report interface
                 keyboard.send('alt+f4')
                 time.sleep(2)
@@ -339,7 +360,7 @@ def run(scroll_bounds: ScreenPoint, header_bounds: ScreenPoint):
                     logger.info("UI successfully updated, scrolling to top of page")
                     break
 
-            mouse.move(*NEUTRAL_CLICK_ZONE)
+            mouse.move(*neutral_click_zone)
             time.sleep(0.5)
             mouse.click()
             # Keep hitting page up until we hit top of screen and nothing changes
