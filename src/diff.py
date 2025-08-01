@@ -45,7 +45,7 @@ def parse_one_json_item(json_item):
     # Remove excessive newlines
     text = re.sub(r'\n{3,}', '\n\n', text)
     # Clean up whitespace
-    text = text.replace('.', '. ')
+    # text = text.replace('.', '. ')
     text = re.sub(r'([a-zA-Z]):([a-zA-Z])', r'\1: \2', text)
     text = re.sub(r'\s+', ' ', text)
     text = text.strip()
@@ -60,27 +60,28 @@ def parse_one_json_item(json_item):
             output[key] = ""
 
     # Process the findings section into subsections based on the anatomy in particular
-    findings_sections = re.split(r"([A-Z][A-Z\s]+:)", output["FINDINGS"])
+    findings_sections = re.split(r"([A-Z][A-Z\s]{2,}:)", output["FINDINGS"])
     findings_dict = {}
+    current_subsection_header = None
 
     for subsection in findings_sections:  # skip first element which will be 'FINDINGS'
-        current_subsection_header = None
         # Case where the element is a header
         if re.match(r"^[A-Z][A-Z\s]+:$", subsection):
             current_subsection_header = subsection.strip(": ").upper()
+            continue
         # Case where the element is some content belonging to a header
-        elif current_subsection_header is not None:
+        if current_subsection_header is not None:
             findings_dict[current_subsection_header] = subsection.strip(": ").replace("\n", " ").strip()
+            continue
         # Case where the text is the first text preceding any of the section headers
-        else:
-            findings_dict["GENERAL"] = subsection.strip(": ").replace("\n", " ").strip()
+        findings_dict["GENERAL"] = subsection.strip(": ").replace("\n", " ").strip()
 
     output["FINDINGS"] = findings_dict
     return output
 
 def preprocess_json(input_json):
     out = []
-    for idx in range(0, len(input_json) - 2, 2):  # have to assume this goes by 2
+    for idx in range(0, len(input_json), 2):  # have to assume this goes by 2
         item1 = input_json[idx]
         item2 = input_json[idx+1]
         reader_keys = [list(item1.keys())[0], list(item2.keys())[0]]
