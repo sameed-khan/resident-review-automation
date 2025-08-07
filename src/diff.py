@@ -5,6 +5,8 @@ from docx import Document
 from docx.shared import Pt, RGBColor
 from docx.enum.text import WD_COLOR_INDEX, WD_ALIGN_PARAGRAPH
 import pdb
+import pickle
+import traceback
 
 KEYS = [
     "STUDY", "INDICATION", "COMPARISON", "ACCESSION NUMBER(S)", "ORDERING CLINICIAN",
@@ -85,10 +87,18 @@ def preprocess_json(input_json):
         item1 = input_json[idx]
         item2 = input_json[idx+1]
         reader_keys = [list(item1.keys())[0], list(item2.keys())[0]]
-        out.append([
-            {"reader": reader_keys[0], **parse_one_json_item(item1)},
-            {"reader": reader_keys[1], **parse_one_json_item(item2)}
-        ])
+        try:
+            out.append([
+                {"reader": reader_keys[0], **parse_one_json_item(item1)},
+                {"reader": reader_keys[1], **parse_one_json_item(item2)}
+            ])
+        except KeyError as e:
+            print("KeyError with JSON preprocessing")
+            print(f"Resident read: {item1}")
+            print(f"Attending read: {item2}")
+            print("This report will be skipped")
+            print(traceback.format_exc())
+            continue
     return out
 
 def preprocess_text(text):
@@ -394,15 +404,17 @@ def create_comparison_document_improved(data, output_file):
 
 def generate_diff_doc():
     """Main function to run the program."""
-    input_file = "output.json"
+    input_file = "report_data.pkl"
     output_file = "report_comparisons.docx"
 
     try:
         # Load data
-        data = load_json_data(input_file)
+        with open(input_file, "rb") as f:
+            data = pickle.load(f)
+
         data = preprocess_json(data)
 
-        with open("output_preprocessed.json", "w") as j:
+        with open("output_preprocessed.json", "a") as j:
             json.dump(data, j)
 
         # Create comparison document using improved algorithm
@@ -411,7 +423,7 @@ def generate_diff_doc():
         print(f"Successfully created comparison document: {output_file}")
 
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"Error with outputting to diff doc--: \n{traceback.format_exc()}")
 
 if __name__ == "__main__":
     generate_diff_doc()

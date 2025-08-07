@@ -15,7 +15,7 @@ from logging_config import setup_logger
 
 def main():
     load_dotenv()
-    print("Please position your mouse cursor in the center of the Fluency Report interface")
+    print("Please position (do not click!) your mouse cursor in the center of the Fluency Report interface")
     input("Press Enter to continue once the mouse is positioned correctly; do NOT click this interface or move your mouse")
 
     # Dirty coordinates
