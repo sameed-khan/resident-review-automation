@@ -7,7 +7,7 @@ import pyautogui
 import mss.tools
 import numpy as np
 from mss import mss
-import json
+import pickle
 
 from screen_parse import is_contained
 
@@ -131,8 +131,8 @@ class UiState:
         self.screen = frame
 
     def save(self):
-        with open("output.json", "w") as f:
-            json.dump(self.data, f, indent=2)
+        with open("report_data.pkl", "wb") as f:
+            pickle.dump(self.data, f)
 
     def convert_bounds(
         self, bounds: tuple[ScreenCoord, ScreenCoord, int, int]

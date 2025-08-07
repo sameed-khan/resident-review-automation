@@ -131,14 +131,25 @@ def locate_score_button(state: UiState) -> np.ndarray[ScreenPoint]:
     logger.debug(f"Located {len(final_matches)} report buttons at points: {final_matches}")
     return np.array(final_matches)
 
-def open_report(location: ScreenPoint, state: UiState, template_path="template/report_textarea.png") -> None:
+def open_report(location: ScreenPoint, state: UiState, template_path="template/report_window_open_indicator.png") -> None:
     logger.info("Opening report")
     logger.debug(f"Opening report: clicking at ({location[0]+10}, {location[1]+10})")
     mouse.move(location[0]+10, location[1]+10)
     time.sleep(0.5)
     mouse.click()
-    wait_for_appearance(state, "template/highlight_start_point.png")
+    wait_for_appearance(state, template_path)
+    logger.info("Report window opened")
     state.refresh()
+
+def wait_for_report_load(state: UiState, template_path="template/highlight_start_point.png") -> None:
+    logger.info("Waiting for report to load")
+    wait_for_appearance(state, template_path)
+    logger.info("Report now loaded in")
+    state.refresh()
+
+def check_if_addendum(state: UiState, template_path="template/report_addendum_label.png") -> None:
+    """Check if the report opened is an addendum, if so - close the report and exit this iteration gracefully"""
+    logger.info("Checking if report is addendum")
 
 def locate_report_top_left(state: UiState, template_path="template/report_interface.png") -> tuple[ScreenPoint, int, int]:
     h, w, _ = cv2.imread(template_path).shape
@@ -310,13 +321,12 @@ def run():
                 open_report(loc, ui_state)
             except Exception as e:
                 logger.error(f"Error processing report corresponding to button at {loc}: {e}")
-                ui_state.data.append({"error": f"{e}"})
                 continue
             try:
+                wait_for_report_load(ui_state)
                 copy_one_report(ui_state)
             except Exception as e:
                 logger.error(f"Error processing report corresponding to button at {loc}: {e}")
-                ui_state.data.append({"error": f"{e}"})
                 logger.info("Closing report")
                 mouse.move(*neutral_click_zone)
                 mouse.click()  # bring back focus to the report interface
