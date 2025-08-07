@@ -13,3 +13,9 @@ attending-reviewed reports.
     * If the script errors out early, try running it again.
 5. The script will go ahead and extract the relevant reports.
 6. You should find the completed output in the final *output.docx*.
+
+## Handling Errors
+1. If the script pauses and does not continue (running in loop), you will usually see similar logging repeated over and over on the command line
+    a. Press Alt+F4 to close the report window
+    b. The script should pick up where it left off
+2. If the above doesn't work, *click the command line window* (labeled Windows Powershell at the top) and press Ctrl + C. The script does take mouse control, so if clicking is difficult, you can also use Alt + Tab to shift focus over to the Powershell screen and then hit Ctrl + C. 
